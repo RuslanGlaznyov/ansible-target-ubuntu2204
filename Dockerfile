@@ -10,7 +10,7 @@ RUN apt-get update \
       rsyslog systemd systemd-cron sudo \
       iproute2 \
       openssh-server \
-      make build-essential gcc git jq chrony lz4 tmux tree bc acl libssl-dev \
+      make build-essential gcc git jq chrony lz4 tmux tree bc acl libssl-dev curl cat vim \
  && rm -rf /var/lib/apt/lists/* \
  && rm -rf /usr/share/doc /usr/share/man \
  && apt-get clean
