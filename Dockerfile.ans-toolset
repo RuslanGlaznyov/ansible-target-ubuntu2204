@@ -1,0 +1,13 @@
+FROM semaphoreui/semaphore:v2.16.31
+
+USER root
+
+RUN apk add --no-cache sudo shadow \
+ && addgroup -S wheel || true \
+ && addgroup semaphore wheel \
+ && printf '%%wheel ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/90-semaphore \
+ && chmod 0440 /etc/sudoers.d/90-semaphore \
+ && pip install --no-cache-dir --upgrade ansible-lint
+
+USER semaphore
+WORKDIR /home/semaphore

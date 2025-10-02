@@ -1,0 +1,117 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  ANSIBLE_TARGET_IMAGE_NAME: ansible-target-ubuntu2204
+  ANS_TOOLSET_IMAGE_NAME: ans-toolset
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set environment variables
+      run: |
+        echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
+        echo "BASEOS_NAME=$(jq -r .baseos.name baseos_digest)" >> $GITHUB_ENV
+        if [ -z "$(jq -r .baseos.digest baseos_digest)" ]; then
+          echo "BASEOS_DIGEST=" >> $GITHUB_ENV
+        else
+          echo "BASEOS_DIGEST=@$(jq -r .baseos.digest baseos_digest)" >> $GITHUB_ENV
+        fi
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for ansible-target
+      id: meta-ansible-target
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.ANSIBLE_TARGET_IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=sha,format=long
+        labels: |
+          org.opencontainers.image.created=${{ env.BUILD_DATE }}
+          org.opencontainers.image.source=${{ github.event.repository.html_url }}
+          org.opencontainers.image.title=${{ github.repository }}/${{ env.ANSIBLE_TARGET_IMAGE_NAME }}
+          org.opencontainers.image.base.digest=${{ env.BASEOS_DIGEST }}
+          org.opencontainers.image.base.name=${{ env.BASEOS_NAME }}
+
+    - name: Extract metadata for ans-toolset
+      id: meta-ans-toolset
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.ANS_TOOLSET_IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=sha,format=long
+        labels: |
+          org.opencontainers.image.created=${{ env.BUILD_DATE }}
+          org.opencontainers.image.source=${{ github.event.repository.html_url }}
+          org.opencontainers.image.title=${{ github.repository }}/${{ env.ANS_TOOLSET_IMAGE_NAME }}
+
+    - name: Build and push ansible-target image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.ansible-target
+        build-args: |
+          BASEOS_DIGEST=${{ env.BASEOS_DIGEST }}
+        push: true
+        tags: ${{ steps.meta-ansible-target.outputs.tags }}
+        labels: ${{ steps.meta-ansible-target.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+        provenance: mode=max
+        sbom: true
+
+    - name: Build and push ans-toolset image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.ans-toolset
+        push: true
+        tags: ${{ steps.meta-ans-toolset.outputs.tags }}
+        labels: ${{ steps.meta-ans-toolset.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    - name: Image digest
+      run: |
+        echo "Ansible Target Image: ${{ steps.meta-ansible-target.outputs.digest }}"
+        echo "Ans Toolset Image: ${{ steps.meta-ans-toolset.outputs.digest }}"
