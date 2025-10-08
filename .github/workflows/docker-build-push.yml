@@ -84,7 +84,7 @@ jobs:
           org.opencontainers.image.title=${{ github.repository }}/${{ env.ANS_TOOLSET_IMAGE_NAME }}
 
     - name: Build and push ansible-target image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: .
         file: ./Dockerfile.ansible-target
@@ -100,7 +100,7 @@ jobs:
         sbom: true
 
     - name: Build and push ans-toolset image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: .
         file: ./Dockerfile.ans-toolset
